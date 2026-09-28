@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Our Workout Week</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+  // ---------------------------------------------------------------
+  // ONE-TIME SETUP: paste your Firebase web-app config here.
+  // (Firebase console → Project settings → Your apps → SDK setup and
+  //  configuration → "Config"). Only databaseURL and projectId are
+  //  strictly required for the tracker to work.
+  // ---------------------------------------------------------------
+  window.FIREBASE_CONFIG = {
+    apiKey: "PASTE_ME",
+    authDomain: "PASTE_ME.firebaseapp.com",
+    databaseURL: "https://PASTE_ME-default-rtdb.firebaseio.com",
+    projectId: "PASTE_ME",
+    appId: "PASTE_ME"
+  };
+</script>
+<style>
+  :root {
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    --bg: #f3f5f9;
+    --surface: #ffffff;
+    --ink: #17203a;
+    --ink-2: #5b667e;
+    --line: #dfe4ee;
+    --accent: #2447f0;
+    --accent-ink: #ffffff;
+    --done: #16a36b;
+    --done-soft: #d6f5e6;
+    --done-ink: #0b5e3c;
+    --today: #fff1c2;
+    --muted-cell: #edf0f6;
+    --radius: 14px;
+    --font: "Outfit", "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1526; --surface: #18203a; --ink: #eef1f8; --ink-2: #a3acc3;
+      --line: #2a3454; --accent: #6b86ff; --accent-ink: #0f1526;
+      --done: #33c98a; --done-soft: #123c2c; --done-ink: #a8f0ce;
+      --today: #4a3c0e; --muted-cell: #1f2843;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1526; --surface: #18203a; --ink: #eef1f8; --ink-2: #a3acc3;
+    --line: #2a3454; --accent: #6b86ff; --accent-ink: #0f1526;
+    --done: #33c98a; --done-soft: #123c2c; --done-ink: #a8f0ce;
+    --today: #4a3c0e; --muted-cell: #1f2843;
+  }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--font); font-size: 16px; line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+  button { font-family: inherit; }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 24px 16px 48px; }
+
+  header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
+  h1 { margin: 0; font-size: clamp(30px, 5vw, 44px); font-weight: 800; letter-spacing: -0.02em; line-height: 1.05; }
+  h1 span { display: block; font-size: 15px; font-weight: 500; color: var(--ink-2); letter-spacing: 0; margin-top: 6px; }
+
+  .weeknav { display: flex; align-items: center; gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 4px; }
+  .weeknav button { border: 0; background: transparent; color: var(--ink); width: 38px; height: 38px; border-radius: 999px; font-size: 20px; cursor: pointer; display: grid; place-items: center; }
+  .weeknav button:hover { background: var(--muted-cell); }
+  .weeknav .label { padding: 0 8px; font-weight: 600; font-size: 15px; min-width: 150px; text-align: center; }
+  .weeknav .thisweek { width: auto; padding: 0 12px; font-size: 13px; font-weight: 600; color: var(--accent); }
+
+  .whoami { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 18px; color: var(--ink-2); font-size: 15px; }
+  .whoami .chips { display: flex; gap: 6px; }
+  .chip { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 7px 14px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+  .board { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 620px; }
+  th, td { padding: 0; }
+  thead th { font-weight: 600; font-size: 13px; color: var(--ink-2); padding: 14px 6px 10px; text-align: center; border-bottom: 1px solid var(--line); }
+  thead th.name { text-align: left; padding-left: 18px; }
+  thead th .d { display: block; font-size: 18px; font-weight: 700; color: var(--ink); margin-top: 2px; }
+  thead th.today { background: var(--today); border-radius: 10px 10px 0 0; }
+  tbody tr + tr td, tbody tr + tr th { border-top: 1px solid var(--line); }
+  tbody th.name { text-align: left; padding: 16px 12px 16px 18px; vertical-align: middle; width: 190px; }
+  .who { display: flex; align-items: center; gap: 12px; }
+  .avatar { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; font-weight: 800; font-size: 17px; color: #fff; flex: none; }
+  .who .nm { font-weight: 700; font-size: 17px; line-height: 1.1; }
+  .who .st { font-size: 13px; color: var(--ink-2); font-weight: 500; margin-top: 3px; }
+  .who .st.hit { color: var(--done-ink); }
+  .who .you { font-size: 11px; font-weight: 700; color: var(--accent); margin-left: 6px; }
+  td.cell { text-align: center; padding: 10px 4px; vertical-align: middle; }
+  td.cell.today { background: var(--today); }
+  .mark {
+    width: 46px; height: 46px; border-radius: 999px; border: 2px solid var(--line);
+    background: var(--muted-cell); color: transparent; cursor: default; display: inline-grid; place-items: center;
+    transition: transform .12s ease, background .12s ease, border-color .12s ease;
+  }
+  .mark.mine { cursor: pointer; border-style: dashed; border-color: var(--ink-2); }
+  .mark.mine:hover { transform: scale(1.06); }
+  .mark.done { background: var(--done); border-color: var(--done); border-style: solid; color: #fff; }
+  .mark svg { width: 22px; height: 22px; }
+  .mark.mine:disabled { opacity: .55; cursor: not-allowed; }
+
+  .goalbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-top: 1px solid var(--line); font-size: 14px; color: var(--ink-2); }
+  .goalbar label { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); font-weight: 600; }
+  .goalbar select { font: inherit; font-weight: 600; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 8px; padding: 6px 10px; }
+  .status { font-size: 14px; color: var(--ink-2); margin-top: 14px; min-height: 20px; }
+  .status.warn { color: #b0541a; }
+  .streak { margin-top: 26px; display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
+  .card .big { font-size: 34px; font-weight: 800; letter-spacing: -0.02em; line-height: 1; }
+  .card .sm { font-size: 13px; color: var(--ink-2); margin-top: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Our workout week<span>Felicitas, Meghan and Sam — tap a day when your workout is done. No login needed.</span></h1>
+    <div class="weeknav">
+      <button id="prev" aria-label="Previous week">‹</button>
+      <div class="label" id="weekLabel"></div>
+      <button id="next" aria-label="Next week">›</button>
+      <button class="thisweek" id="today">This week</button>
+    </div>
+  </header>
+
+  <div class="whoami">
+    <span>I am</span>
+    <div class="chips" id="chips"></div>
+  </div>
+
+  <div class="board">
+    <div class="scroll">
+      <table id="grid" aria-label="Weekly workout completion">
+        <thead><tr id="headRow"></tr></thead>
+        <tbody id="body"></tbody>
+      </table>
+    </div>
+    <div class="goalbar">
+      <label>My weekly goal
+        <select id="goal"></select>
+      </label>
+      <span id="legend">Solid green = workout done. Dashed circles are yours to tap.</span>
+    </div>
+  </div>
+  <div class="status" id="status">Connecting…</div>
+
+  <div class="streak" id="stats"></div>
+</div>
+
+<script>
+(function () {
+  const PEOPLE = [
+    { id: "felicitas", name: "Felicitas", color: "#e0561d" },
+    { id: "meghan",    name: "Meghan",    color: "#8a3ffc" },
+    { id: "sam",       name: "Sam",       color: "#2447f0" },
+  ];
+  const DAYS = ["mon","tue","wed","thu","fri","sat","sun"];
+  const DAY_LABEL = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+  const CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg>';
+
+  // ---- helpers ------------------------------------------------------------
+  function mondayOf(d) { const x = new Date(d); x.setHours(0,0,0,0); const day = (x.getDay()+6)%7; x.setDate(x.getDate()-day); return x; }
+  function ymd(d) { return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); }
+  function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate()+n); return x; }
+  function fmt(d) { return d.toLocaleDateString(undefined, { month: "short", day: "numeric" }); }
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+  // ---- state --------------------------------------------------------------
+  let weekStart = mondayOf(new Date());
+  let me = lsGet("wt:me");
+  let db = null, unsub = null, canWrite = true;
+  let weekData = {};   // personId -> { days: {mon:true,...}, goal: n, updated: {...} }
+  let writing = false;
+
+  const $ = (id) => document.getElementById(id);
+  const statusEl = $("status");
+  function setStatus(msg, warn) { statusEl.textContent = msg; statusEl.className = "status" + (warn ? " warn" : ""); }
+
+  // ---- render -------------------------------------------------------------
+  function renderChips() {
+    $("chips").innerHTML = PEOPLE.map(p =>
+      `<button class="chip" data-id="${p.id}" aria-pressed="${me===p.id}">${p.name}</button>`).join("");
+  }
+  function renderHeader() {
+    const end = addDays(weekStart, 6);
+    $("weekLabel").textContent = fmt(weekStart) + " – " + fmt(end);
+    const todayKey = ymd(new Date());
+    $("headRow").innerHTML = `<th class="name">Week of ${fmt(weekStart)}</th>` + DAYS.map((d,i) => {
+      const date = addDays(weekStart, i);
+      const isToday = ymd(date) === todayKey;
+      return `<th class="${isToday?"today":""}">${DAY_LABEL[i]}<span class="d">${date.getDate()}</span></th>`;
+    }).join("");
+  }
+  function renderBody() {
+    const todayKey = ymd(new Date());
+    $("body").innerHTML = PEOPLE.map(p => {
+      const rec = weekData[p.id] || {};
+      const days = rec.days || {};
+      const goal = rec.goal || 3;
+      const count = DAYS.filter(d => days[d]).length;
+      const hit = count >= goal;
+      const mine = me === p.id;
+      const cells = DAYS.map((d,i) => {
+        const date = addDays(weekStart, i);
+        const isToday = ymd(date) === todayKey;
+        const done = !!days[d];
+        const cls = "mark" + (done ? " done" : "") + (mine ? " mine" : "");
+        const dis = mine && (!db || !canWrite) ? "disabled" : "";
+        return `<td class="cell ${isToday?"today":""}"><button class="${cls}" data-p="${p.id}" data-d="${d}" ${mine ? "" : "tabindex=-1"} ${dis} aria-label="${p.name} ${DAY_LABEL[i]}${done?" done":""}" aria-pressed="${done}">${CHECK}</button></td>`;
+      }).join("");
+      return `<tr>
+        <th class="name"><div class="who">
+          <div class="avatar" style="background:${p.color}">${p.name[0]}</div>
+          <div><div class="nm">${p.name}${mine ? '<span class="you">you</span>' : ""}</div>
+          <div class="st ${hit?"hit":""}">${count} of ${goal} this week${hit ? " — goal met" : ""}</div></div>
+        </div></th>${cells}</tr>`;
+    }).join("");
+
+    // goal select
+    const sel = $("goal");
+    const myGoal = (weekData[me] && weekData[me].goal) || 3;
+    sel.innerHTML = [1,2,3,4,5,6,7].map(n => `<option value="${n}" ${n===myGoal?"selected":""}>${n} ${n===1?"workout":"workouts"}</option>`).join("");
+    sel.disabled = !me || !db || !canWrite;
+
+    // stats
+    $("stats").innerHTML = PEOPLE.map(p => {
+      const rec = weekData[p.id] || {};
+      const days = rec.days || {};
+      const count = DAYS.filter(d => days[d]).length;
+      const last = rec.updated ? new Date(rec.updated) : null;
+      return `<div class="card"><div class="big" style="color:${p.color}">${count}</div>
+        <div class="sm">${p.name} — ${count === 1 ? "workout" : "workouts"} this week${last ? ` · updated ${last.toLocaleDateString(undefined,{month:"short",day:"numeric"})}` : ""}</div></div>`;
+    }).join("");
+  }
+  function render() { renderChips(); renderHeader(); renderBody(); }
+
+  // ---- data (Firebase Realtime Database) ---------------------------------
+  function weekId() { return ymd(weekStart); }
+  function subscribe() {
+    if (unsub) { unsub(); unsub = null; }
+    weekData = {};
+    renderBody();
+    if (!db) return;
+    const ref = db.ref("weeks/" + weekId());
+    const handler = snap => {
+      weekData = snap.val() || {};
+      renderBody();
+      setStatus(me ? "Live — everyone with the link sees updates as they happen." : "Live — pick your name above to mark your own days.");
+    };
+    ref.on("value", handler, err => setStatus("Live updates stopped (" + (err && err.code || "error") + "). Reload the page to reconnect.", true));
+    unsub = () => ref.off("value", handler);
+  }
+
+  async function save(personId, body) {
+    writing = true;
+    try {
+      await db.ref("weeks/" + weekId() + "/" + personId).set(body);
+      weekData = Object.assign({}, weekData, { [personId]: body });
+      renderBody();
+    } catch (e) {
+      if (e && String(e.code || e.message).toLowerCase().includes("permission")) { canWrite = false; setStatus("The database rules are blocking writes — see the setup note about Realtime Database rules.", true); }
+      else setStatus("Couldn't save that — try again in a moment.", true);
+      renderBody();
+    } finally { writing = false; }
+  }
+  function toggle(personId, day) {
+    if (!db || personId !== me || writing) return;
+    const rec = weekData[personId] || {};
+    const days = Object.assign({}, rec.days || {});
+    if (days[day]) delete days[day]; else days[day] = true;
+    save(personId, { person: personId, week: weekId(), days, goal: rec.goal || 3, updated: new Date().toISOString() });
+  }
+  function setGoal(n) {
+    if (!db || !me || writing) return;
+    const rec = weekData[me] || {};
+    save(me, { person: me, week: weekId(), days: rec.days || {}, goal: n, updated: new Date().toISOString() });
+  }
+
+  // ---- events -------------------------------------------------------------
+  $("chips").addEventListener("click", e => {
+    const b = e.target.closest(".chip"); if (!b) return;
+    me = b.dataset.id; lsSet("wt:me", me); render();
+    if (db) setStatus("Live — you're marking days as " + PEOPLE.find(p=>p.id===me).name + ".");
+  });
+  $("body").addEventListener("click", e => {
+    const b = e.target.closest(".mark"); if (!b) return;
+    if (b.dataset.p !== me) { setStatus("Only " + PEOPLE.find(p=>p.id===b.dataset.p).name + " can mark their own days.", false); return; }
+    toggle(b.dataset.p, b.dataset.d);
+  });
+  $("goal").addEventListener("change", e => setGoal(parseInt(e.target.value, 10)));
+  $("prev").addEventListener("click", () => { weekStart = addDays(weekStart, -7); renderHeader(); subscribe(); });
+  $("next").addEventListener("click", () => { weekStart = addDays(weekStart, 7); renderHeader(); subscribe(); });
+  $("today").addEventListener("click", () => { weekStart = mondayOf(new Date()); renderHeader(); subscribe(); });
+
+  // ---- boot ---------------------------------------------------------------
+  render();
+  (function () {
+    const cfg = window.FIREBASE_CONFIG || {};
+    if (!cfg.databaseURL || /PASTE_ME/.test(cfg.databaseURL) || typeof firebase === "undefined") {
+      setStatus("Setup needed: paste your Firebase config at the top of this file (see the setup notes), then reload.", true);
+      renderBody(); return;
+    }
+    try {
+      firebase.initializeApp(cfg);
+      db = firebase.database();
+      subscribe();
+    } catch (e) {
+      setStatus("Couldn't connect to the database: " + (e && e.message || e), true);
+    }
+  })();
+})();
+</script>
+</body>
+</html>
